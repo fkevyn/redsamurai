@@ -1,0 +1,19 @@
+ $threejs-builder Study the samurai asset in public/assets/glb/samurai/samurai_skeleton.glb and the
+  animations in public/assets/glb/samurai/samurai_animations.glb .
+  Firstly, create an asset index json file that will clearly lay out the models animations and
+  state so
+  that it can be easily imported into a threejs scene.
+
+$threejs-builder create me a threejs scene with the loaded pirate character
+I want this to have an orbit camera and then I want buttons to switch between the different animation states.
+Make sure that this is touch control friendly.
+LMB / Single Touch - Rotate
+Scroll wheel / Pinch to zoom - Zoom
+RMB / Two fingers - Pan
+
+Use the public/assets/assets_index.json as the canonical reference for the pirate character.
+
+
+Use $threejs-capacitor-ios to make sure it can be deployed on mobile.
+
+$threejs-capacitor-ios i want this project to be deployed on an ios simulator
