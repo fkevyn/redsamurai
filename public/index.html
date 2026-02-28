@@ -5,12 +5,179 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Red Samurai</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #000; }
-    canvas { display: block; }
+    :root {
+      --panel-bg: rgba(10, 12, 16, 0.78);
+      --panel-border: rgba(255, 255, 255, 0.18);
+      --text-main: #f4f7fb;
+      --text-muted: #b8c2d8;
+      --accent: #d63f3f;
+      --accent-active: #ff6161;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      overflow: hidden;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--text-main);
+      background: radial-gradient(circle at 20% 20%, #2b1619 0%, #07090f 45%, #040507 100%);
+    }
+
+    canvas {
+      display: block;
+      touch-action: none;
+    }
+
+    #ui {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 12px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .panel {
+      width: min(460px, 100%);
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      backdrop-filter: blur(6px);
+      border-radius: 14px;
+      padding: 12px;
+      pointer-events: auto;
+    }
+
+    h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    #status {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      min-height: 1.1rem;
+    }
+
+    #status.error {
+      color: #ff7f7f;
+    }
+
+    #stateButtons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    #stateButtons button {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-main);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background 150ms ease, border-color 150ms ease, transform 120ms ease;
+    }
+
+    #stateButtons button:hover {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.38);
+    }
+
+    #stateButtons button:active {
+      transform: translateY(1px);
+    }
+
+    #stateButtons button.active {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-active) 100%);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .speed-control {
+      margin-bottom: 10px;
+    }
+
+    .speed-control label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    #speedValue {
+      color: var(--text-main);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #speedInput {
+      width: 100%;
+      accent-color: #ef5a5a;
+      touch-action: manipulation;
+    }
+
+    .controls-help {
+      display: grid;
+      gap: 3px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    @media (max-width: 700px) {
+      #ui {
+        padding: 10px;
+      }
+
+      .panel {
+        border-radius: 12px;
+        padding: 10px;
+      }
+
+      #stateButtons button {
+        padding: 11px 13px;
+      }
+
+      .controls-help {
+        font-size: 0.74rem;
+      }
+    }
   </style>
 </head>
 <body>
+  <div id="ui">
+    <div class="panel">
+      <h1>Samurai Animation Controller</h1>
+      <div id="status">Initializing...</div>
+      <div id="stateButtons"></div>
+      <div class="speed-control">
+        <label for="speedInput">Speed <span id="speedValue">0.00</span></label>
+        <input id="speedInput" type="range" min="0" max="4" step="0.01" value="0" />
+      </div>
+      <div class="controls-help">
+        <div>LMB / Single Touch: Rotate</div>
+        <div>Scroll Wheel / Pinch: Zoom</div>
+        <div>RMB / Two Fingers: Pan</div>
+      </div>
+    </div>
+  </div>
+
   <script type="importmap">
     {
       "imports": {
@@ -19,71 +186,451 @@
       }
     }
   </script>
+
   <script type="module">
     import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-    // Scene
+    const ASSET_INDEX_URL = "/assets/assets_index.json";
+
+    const statusEl = document.getElementById("status");
+    const stateButtonsEl = document.getElementById("stateButtons");
+    const speedInputEl = document.getElementById("speedInput");
+    const speedValueEl = document.getElementById("speedValue");
+
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
+    scene.background = new THREE.Color(0x0b0d13);
 
-    // Camera
     const camera = new THREE.PerspectiveCamera(
-      75,
+      50,
       window.innerWidth / window.innerHeight,
       0.1,
       1000
     );
-    camera.position.z = 3;
 
-    // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.style.touchAction = "none";
+    renderer.domElement.addEventListener("contextmenu", (event) => event.preventDefault());
     document.body.appendChild(renderer.domElement);
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404040, 2);
-    scene.add(ambientLight);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enablePan = true;
+    controls.enableZoom = true;
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+    controls.touches = {
+      ONE: THREE.TOUCH.ROTATE,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
-    directionalLight.position.set(5, 5, 5);
-    scene.add(directionalLight);
+    const hemiLight = new THREE.HemisphereLight(0xbfd2ff, 0x19140f, 0.65);
+    scene.add(hemiLight);
 
-    const pointLight = new THREE.PointLight(0xff4444, 2, 10);
-    pointLight.position.set(-3, 2, 2);
-    scene.add(pointLight);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.4);
+    keyLight.position.set(4, 7, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.near = 0.1;
+    keyLight.shadow.camera.far = 35;
+    keyLight.shadow.camera.left = -8;
+    keyLight.shadow.camera.right = 8;
+    keyLight.shadow.camera.top = 8;
+    keyLight.shadow.camera.bottom = -8;
+    scene.add(keyLight);
 
-    // Red Samurai Cube (hello world)
-    const geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xcc0000,
-      roughness: 0.3,
-      metalness: 0.7,
-    });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+    const fillLight = new THREE.DirectionalLight(0xffd4c4, 0.42);
+    fillLight.position.set(-3, 3, -4);
+    scene.add(fillLight);
 
-    // Wireframe overlay
-    const wireframe = new THREE.LineSegments(
-      new THREE.EdgesGeometry(geometry),
-      new THREE.LineBasicMaterial({ color: 0xff6666, linewidth: 1 })
+    const ground = new THREE.Mesh(
+      new THREE.CircleGeometry(10, 64),
+      new THREE.MeshStandardMaterial({
+        color: 0x1f2430,
+        roughness: 0.88,
+        metalness: 0.08,
+      })
     );
-    cube.add(wireframe);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.001;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-    // Animation
-    function animate() {
-      requestAnimationFrame(animate);
-      cube.rotation.x += 0.008;
-      cube.rotation.y += 0.012;
-      renderer.render(scene, camera);
+    const grid = new THREE.GridHelper(10, 20, 0x5d6b8a, 0x2a3344);
+    const gridMaterials = Array.isArray(grid.material) ? grid.material : [grid.material];
+    for (const material of gridMaterials) {
+      material.transparent = true;
+      material.opacity = 0.45;
     }
-    animate();
+    scene.add(grid);
 
-    // Resize handler
+    const loader = new GLTFLoader();
+    const clock = new THREE.Clock();
+
+    let mixer = null;
+    let activeAction = null;
+    let currentState = null;
+    let currentSpeed = 0;
+    let idleStateName = "idle";
+    let locomotionStates = [];
+    const stateMap = new Map();
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function labelForState(stateName) {
+      return stateName
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    function getSamuraiConfig(rawIndex) {
+      if (rawIndex?.characters?.samurai) return rawIndex.characters.samurai;
+      if (rawIndex?.samurai) return rawIndex.samurai;
+      return rawIndex;
+    }
+
+    async function fetchJson(path) {
+      const response = await fetch(path);
+      if (!response.ok) {
+        throw new Error(`Failed to load ${path} (${response.status})`);
+      }
+      return response.json();
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function configureAction(action, stateDef, clipDef) {
+      const loopName = String(stateDef.loop ?? clipDef.loop ?? "repeat").toLowerCase();
+      const isOnce = loopName === "once";
+
+      action.enabled = true;
+      action.paused = false;
+      action.setLoop(isOnce ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = Boolean(
+        stateDef.clampWhenFinished ?? clipDef.clampWhenFinished ?? isOnce
+      );
+      action.stop();
+    }
+
+    function isLoopOnceEntry(entry) {
+      if (!entry) return false;
+      const loopName = String(entry.stateDef.loop ?? entry.clipDef.loop ?? "repeat").toLowerCase();
+      return loopName === "once";
+    }
+
+    function setActiveButton(stateName) {
+      const buttons = stateButtonsEl.querySelectorAll("button[data-state]");
+      buttons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.state === stateName);
+      });
+    }
+
+    function playState(stateName, options = {}) {
+      const entry = stateMap.get(stateName);
+      if (!entry) return;
+
+      const { action, stateDef, clipDef } = entry;
+      const loopName = String(stateDef.loop ?? clipDef.loop ?? "repeat").toLowerCase();
+      const isLoopOnce = loopName === "once";
+
+      if (stateName === currentState && !isLoopOnce) {
+        return;
+      }
+
+      const immediate = Boolean(options.immediate);
+      const fadeIn = immediate ? 0 : Number(clipDef.fadeIn ?? 0.2);
+      const fadeOut = immediate ? 0 : Number(clipDef.fadeOut ?? 0.16);
+
+      if (activeAction && activeAction !== action) {
+        activeAction.fadeOut(fadeOut);
+      }
+
+      action.reset();
+      action.setEffectiveTimeScale(1);
+      action.setEffectiveWeight(1);
+      action.fadeIn(fadeIn);
+      action.play();
+
+      activeAction = action;
+      currentState = stateName;
+      setActiveButton(stateName);
+      setStatus(`State: ${labelForState(stateName)}`);
+    }
+
+    function buildStateButtons(orderedStateNames) {
+      stateButtonsEl.innerHTML = "";
+
+      orderedStateNames.forEach((stateName) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.state = stateName;
+        button.textContent = labelForState(stateName);
+        button.addEventListener("click", () => playState(stateName));
+        stateButtonsEl.appendChild(button);
+      });
+    }
+
+    function normalizeStates(assetConfig) {
+      if (assetConfig.stateMachine?.states) {
+        return assetConfig.stateMachine.states;
+      }
+
+      const fallbackStates = {};
+      for (const clip of assetConfig.animations?.clips ?? []) {
+        const stateName = clip.state ?? clip.name;
+        fallbackStates[stateName] = {
+          clip: clip.name,
+          loop: clip.loop ?? "repeat",
+          clampWhenFinished: clip.clampWhenFinished ?? false,
+        };
+      }
+      return fallbackStates;
+    }
+
+    function deriveLocomotionStates(stateDefs) {
+      const locomotion = [];
+
+      for (const [stateName, stateDef] of Object.entries(stateDefs)) {
+        if (!stateMap.has(stateName)) continue;
+        if (!Array.isArray(stateDef.speedRange) || stateDef.speedRange.length < 2) continue;
+
+        const min = Number(stateDef.speedRange[0]);
+        const max = Number(stateDef.speedRange[1]);
+        if (!Number.isFinite(min) || !Number.isFinite(max)) continue;
+
+        locomotion.push({ stateName, min, max });
+      }
+
+      locomotion.sort((a, b) => a.min - b.min);
+      return locomotion;
+    }
+
+    function pickLocomotionStateForSpeed(speed) {
+      if (!locomotionStates.length) {
+        return stateMap.has(idleStateName) ? idleStateName : null;
+      }
+
+      for (const range of locomotionStates) {
+        if (speed >= range.min && speed < range.max) {
+          return range.stateName;
+        }
+      }
+
+      const first = locomotionStates[0];
+      const last = locomotionStates[locomotionStates.length - 1];
+
+      if (speed < first.min && stateMap.has(idleStateName)) {
+        return idleStateName;
+      }
+
+      if (speed < first.min) return first.stateName;
+      if (speed >= last.max) return last.stateName;
+
+      return stateMap.has(idleStateName) ? idleStateName : first.stateName;
+    }
+
+    function updateSpeedValueLabel(value) {
+      speedValueEl.textContent = Number(value).toFixed(2);
+    }
+
+    function updateLocomotionFromSpeed(options = {}) {
+      const currentEntry = stateMap.get(currentState);
+      if (!options.force && isLoopOnceEntry(currentEntry) && currentEntry?.action?.isRunning?.()) {
+        return;
+      }
+
+      const targetState = pickLocomotionStateForSpeed(currentSpeed);
+      if (!targetState || !stateMap.has(targetState)) return;
+      playState(targetState, options);
+    }
+
+    function configureSpeedControl(assetConfig, stateDefs) {
+      const speedParam = assetConfig?.stateMachine?.parameters?.speed ?? {};
+      const explicitCaps = locomotionStates
+        .map((range) => range.max)
+        .filter((value) => Number.isFinite(value) && value > 0 && value <= 20);
+      const inferredCaps = locomotionStates
+        .map((range) => range.min + 2)
+        .filter((value) => Number.isFinite(value) && value > 0);
+      const derivedMax = Math.max(
+        4,
+        ...(explicitCaps.length ? explicitCaps : inferredCaps)
+      );
+
+      const min = Number.isFinite(Number(speedParam.min)) ? Number(speedParam.min) : 0;
+      const max = Number.isFinite(Number(speedParam.max))
+        ? Number(speedParam.max)
+        : derivedMax;
+      const step = Number.isFinite(Number(speedParam.step))
+        ? Number(speedParam.step)
+        : 0.01;
+      const defaultSpeed = Number.isFinite(Number(speedParam.default))
+        ? Number(speedParam.default)
+        : min;
+
+      speedInputEl.min = String(min);
+      speedInputEl.max = String(max);
+      speedInputEl.step = String(step);
+
+      currentSpeed = clamp(defaultSpeed, min, max);
+      speedInputEl.value = String(currentSpeed);
+      updateSpeedValueLabel(currentSpeed);
+
+      speedInputEl.oninput = (event) => {
+        const value = Number(event.target.value);
+        currentSpeed = Number.isFinite(value) ? value : min;
+        updateSpeedValueLabel(currentSpeed);
+        updateLocomotionFromSpeed();
+      };
+
+      if (stateMap.has("idle")) {
+        idleStateName = "idle";
+      } else {
+        idleStateName =
+          Object.keys(stateDefs).find(
+            (stateName) =>
+              stateMap.has(stateName) &&
+              !Array.isArray(stateDefs[stateName].speedRange)
+          ) ?? locomotionStates[0]?.stateName ?? [...stateMap.keys()][0];
+      }
+    }
+
+    function fitCameraToModel(modelRoot) {
+      const bounds = new THREE.Box3().setFromObject(modelRoot);
+      const center = bounds.getCenter(new THREE.Vector3());
+
+      modelRoot.position.x -= center.x;
+      modelRoot.position.z -= center.z;
+      modelRoot.position.y -= bounds.min.y;
+
+      const recenteredBounds = new THREE.Box3().setFromObject(modelRoot);
+      const size = recenteredBounds.getSize(new THREE.Vector3());
+      const height = Math.max(size.y, 1);
+      const radius = Math.max(size.length() * 0.5, 2);
+
+      camera.position.set(0, height * 0.9, radius * 1.85);
+      camera.lookAt(0, height * 0.45, 0);
+
+      controls.target.set(0, height * 0.45, 0);
+      controls.minDistance = Math.max(0.9, radius * 0.45);
+      controls.maxDistance = Math.max(8, radius * 5);
+      controls.update();
+    }
+
+    async function loadSamuraiScene() {
+      setStatus("Loading manifest...");
+      const rawIndex = await fetchJson(ASSET_INDEX_URL);
+      const asset = getSamuraiConfig(rawIndex);
+
+      if (!asset?.model?.uri || !asset?.animations?.uri) {
+        throw new Error("Asset manifest is missing model/animation URIs");
+      }
+
+      setStatus("Loading model and animation clips...");
+
+      const [modelGltf, animationGltf] = await Promise.all([
+        loader.loadAsync(asset.model.uri),
+        loader.loadAsync(asset.animations.uri),
+      ]);
+
+      const modelRoot = modelGltf.scene;
+      modelRoot.traverse((object) => {
+        if (object.isMesh) {
+          object.castShadow = true;
+          object.receiveShadow = true;
+        }
+      });
+      scene.add(modelRoot);
+
+      fitCameraToModel(modelRoot);
+
+      mixer = new THREE.AnimationMixer(modelRoot);
+      mixer.addEventListener("finished", () => {
+        const current = stateMap.get(currentState);
+        if (!current) return;
+
+        const nextState = current.stateDef.nextState;
+        if (nextState && stateMap.has(nextState)) {
+          playState(nextState);
+        }
+
+        updateLocomotionFromSpeed({ force: true });
+      });
+
+      const clipDefs = asset.animations?.clips ?? [];
+      const clipDefByName = new Map(clipDefs.map((clipDef) => [clipDef.name, clipDef]));
+      const stateDefs = normalizeStates(asset);
+      const stateNames = Object.keys(stateDefs);
+
+      stateMap.clear();
+
+      for (const stateName of stateNames) {
+        const stateDef = stateDefs[stateName];
+        const clipName = stateDef.clip;
+        const clipDef = clipDefByName.get(clipName) ?? {};
+        const clip = THREE.AnimationClip.findByName(animationGltf.animations, clipName);
+
+        if (!clip) {
+          console.warn(`Missing clip for state "${stateName}": ${clipName}`);
+          continue;
+        }
+
+        const action = mixer.clipAction(clip, modelRoot);
+        configureAction(action, stateDef, clipDef);
+        stateMap.set(stateName, { action, stateDef, clipDef });
+      }
+
+      if (!stateMap.size) {
+        throw new Error("No playable states found in the animation manifest");
+      }
+
+      const playableStateNames = stateNames.filter((stateName) => stateMap.has(stateName));
+      buildStateButtons(playableStateNames);
+
+      locomotionStates = deriveLocomotionStates(stateDefs);
+      configureSpeedControl(asset, stateDefs);
+
+      const initialState = asset.stateMachine?.initialState;
+      const speedState = pickLocomotionStateForSpeed(currentSpeed);
+      const startState = stateMap.has(speedState)
+        ? speedState
+        : (stateMap.has(initialState) ? initialState : playableStateNames[0]);
+
+      playState(startState, { immediate: true });
+    }
+
     window.addEventListener("resize", () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    });
+
+    renderer.setAnimationLoop(() => {
+      const delta = clock.getDelta();
+      if (mixer) mixer.update(delta);
+      controls.update();
+      renderer.render(scene, camera);
+    });
+
+    loadSamuraiScene().catch((error) => {
+      console.error(error);
+      setStatus(error.message, true);
     });
   </script>
 </body>

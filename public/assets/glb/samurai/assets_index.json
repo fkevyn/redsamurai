@@ -1,0 +1,169 @@
+{
+  "assetId": "samurai",
+  "version": 1,
+  "coordinateSystem": "Y_UP",
+  "units": "meters",
+  "model": {
+    "uri": "/assets/glb/samurai/samurai_skeleton.glb",
+    "scene": 0,
+    "armatureNode": "Armature",
+    "meshNode": "char1",
+    "skinName": "Armature",
+    "skeletonRoot": "Hips",
+    "jointCount": 24,
+    "joints": [
+      "Hips",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "Spine02",
+      "Spine01",
+      "Spine",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftForeArm",
+      "LeftHand",
+      "RightShoulder",
+      "RightArm",
+      "RightForeArm",
+      "RightHand",
+      "neck",
+      "Head",
+      "head_end",
+      "headfront"
+    ],
+    "bindPoseClip": {
+      "name": "Armature|clip0|baselayer",
+      "duration": 0.0333333333,
+      "isStaticPose": true
+    }
+  },
+  "animations": {
+    "uri": "/assets/glb/samurai/samurai_animations.glb",
+    "clips": [
+      {
+        "name": "Idle_3",
+        "state": "idle",
+        "duration": 9.9666666667,
+        "loop": "repeat",
+        "clampWhenFinished": false,
+        "fadeIn": 0.25,
+        "fadeOut": 0.2
+      },
+      {
+        "name": "Walking",
+        "state": "walk",
+        "duration": 1.0333333333,
+        "loop": "repeat",
+        "clampWhenFinished": false,
+        "fadeIn": 0.15,
+        "fadeOut": 0.12
+      },
+      {
+        "name": "Running",
+        "state": "run",
+        "duration": 0.6333333333,
+        "loop": "repeat",
+        "clampWhenFinished": false,
+        "fadeIn": 0.1,
+        "fadeOut": 0.1
+      },
+      {
+        "name": "Attack",
+        "state": "attack",
+        "duration": 2.8,
+        "loop": "once",
+        "clampWhenFinished": true,
+        "fadeIn": 0.08,
+        "fadeOut": 0.12
+      }
+    ]
+  },
+  "stateMachine": {
+    "initialState": "idle",
+    "parameters": {
+      "speed": {
+        "type": "number",
+        "default": 0
+      },
+      "attack": {
+        "type": "trigger"
+      }
+    },
+    "states": {
+      "idle": {
+        "clip": "Idle_3",
+        "loop": "repeat"
+      },
+      "walk": {
+        "clip": "Walking",
+        "loop": "repeat",
+        "speedRange": [
+          0.1,
+          2.0
+        ]
+      },
+      "run": {
+        "clip": "Running",
+        "loop": "repeat",
+        "speedRange": [
+          2.0,
+          1000.0
+        ]
+      },
+      "attack": {
+        "clip": "Attack",
+        "loop": "once",
+        "clampWhenFinished": true,
+        "nextState": "idle"
+      }
+    },
+    "transitions": [
+      {
+        "from": "idle",
+        "to": "walk",
+        "condition": "speed >= 0.1 && speed < 2.0"
+      },
+      {
+        "from": "idle",
+        "to": "run",
+        "condition": "speed >= 2.0"
+      },
+      {
+        "from": "walk",
+        "to": "idle",
+        "condition": "speed < 0.1"
+      },
+      {
+        "from": "walk",
+        "to": "run",
+        "condition": "speed >= 2.0"
+      },
+      {
+        "from": "run",
+        "to": "walk",
+        "condition": "speed >= 0.1 && speed < 2.0"
+      },
+      {
+        "from": "run",
+        "to": "idle",
+        "condition": "speed < 0.1"
+      },
+      {
+        "from": "*",
+        "to": "attack",
+        "condition": "attack === true"
+      },
+      {
+        "from": "attack",
+        "to": "idle",
+        "condition": "onFinished"
+      }
+    ]
+  }
+}
