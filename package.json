@@ -1,0 +1,14 @@
+{
+  "name": "redsamurai",
+  "version": "1.0.0",
+  "description": "Three.js Hello World",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "three": "^0.170.0"
+  }
+}
