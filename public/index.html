@@ -106,32 +106,6 @@
       color: #fff;
     }
 
-    .speed-control {
-      margin-bottom: 10px;
-    }
-
-    .speed-control label {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-    }
-
-    #speedValue {
-      color: var(--text-main);
-      font-variant-numeric: tabular-nums;
-    }
-
-    #speedInput {
-      width: 100%;
-      accent-color: #ef5a5a;
-      touch-action: manipulation;
-    }
-
     .controls-help {
       display: grid;
       gap: 3px;
@@ -166,10 +140,6 @@
       <h1>Samurai Animation Controller</h1>
       <div id="status">Initializing...</div>
       <div id="stateButtons"></div>
-      <div class="speed-control">
-        <label for="speedInput">Speed <span id="speedValue">0.00</span></label>
-        <input id="speedInput" type="range" min="0" max="4" step="0.01" value="0" />
-      </div>
       <div class="controls-help">
         <div>LMB / Single Touch: Rotate</div>
         <div>Scroll Wheel / Pinch: Zoom</div>
@@ -196,8 +166,6 @@
 
     const statusEl = document.getElementById("status");
     const stateButtonsEl = document.getElementById("stateButtons");
-    const speedInputEl = document.getElementById("speedInput");
-    const speedValueEl = document.getElementById("speedValue");
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0d13);
@@ -280,9 +248,6 @@
     let mixer = null;
     let activeAction = null;
     let currentState = null;
-    let currentSpeed = 0;
-    let idleStateName = "idle";
-    let locomotionStates = [];
     const stateMap = new Map();
 
     function setStatus(message, isError = false) {
@@ -310,10 +275,6 @@
       return response.json();
     }
 
-    function clamp(value, min, max) {
-      return Math.min(max, Math.max(min, value));
-    }
-
     function configureAction(action, stateDef, clipDef) {
       const loopName = String(stateDef.loop ?? clipDef.loop ?? "repeat").toLowerCase();
       const isOnce = loopName === "once";
@@ -325,12 +286,6 @@
         stateDef.clampWhenFinished ?? clipDef.clampWhenFinished ?? isOnce
       );
       action.stop();
-    }
-
-    function isLoopOnceEntry(entry) {
-      if (!entry) return false;
-      const loopName = String(entry.stateDef.loop ?? entry.clipDef.loop ?? "repeat").toLowerCase();
-      return loopName === "once";
     }
 
     function setActiveButton(stateName) {
@@ -402,114 +357,6 @@
       return fallbackStates;
     }
 
-    function deriveLocomotionStates(stateDefs) {
-      const locomotion = [];
-
-      for (const [stateName, stateDef] of Object.entries(stateDefs)) {
-        if (!stateMap.has(stateName)) continue;
-        if (!Array.isArray(stateDef.speedRange) || stateDef.speedRange.length < 2) continue;
-
-        const min = Number(stateDef.speedRange[0]);
-        const max = Number(stateDef.speedRange[1]);
-        if (!Number.isFinite(min) || !Number.isFinite(max)) continue;
-
-        locomotion.push({ stateName, min, max });
-      }
-
-      locomotion.sort((a, b) => a.min - b.min);
-      return locomotion;
-    }
-
-    function pickLocomotionStateForSpeed(speed) {
-      if (!locomotionStates.length) {
-        return stateMap.has(idleStateName) ? idleStateName : null;
-      }
-
-      for (const range of locomotionStates) {
-        if (speed >= range.min && speed < range.max) {
-          return range.stateName;
-        }
-      }
-
-      const first = locomotionStates[0];
-      const last = locomotionStates[locomotionStates.length - 1];
-
-      if (speed < first.min && stateMap.has(idleStateName)) {
-        return idleStateName;
-      }
-
-      if (speed < first.min) return first.stateName;
-      if (speed >= last.max) return last.stateName;
-
-      return stateMap.has(idleStateName) ? idleStateName : first.stateName;
-    }
-
-    function updateSpeedValueLabel(value) {
-      speedValueEl.textContent = Number(value).toFixed(2);
-    }
-
-    function updateLocomotionFromSpeed(options = {}) {
-      const currentEntry = stateMap.get(currentState);
-      if (!options.force && isLoopOnceEntry(currentEntry) && currentEntry?.action?.isRunning?.()) {
-        return;
-      }
-
-      const targetState = pickLocomotionStateForSpeed(currentSpeed);
-      if (!targetState || !stateMap.has(targetState)) return;
-      playState(targetState, options);
-    }
-
-    function configureSpeedControl(assetConfig, stateDefs) {
-      const speedParam = assetConfig?.stateMachine?.parameters?.speed ?? {};
-      const explicitCaps = locomotionStates
-        .map((range) => range.max)
-        .filter((value) => Number.isFinite(value) && value > 0 && value <= 20);
-      const inferredCaps = locomotionStates
-        .map((range) => range.min + 2)
-        .filter((value) => Number.isFinite(value) && value > 0);
-      const derivedMax = Math.max(
-        4,
-        ...(explicitCaps.length ? explicitCaps : inferredCaps)
-      );
-
-      const min = Number.isFinite(Number(speedParam.min)) ? Number(speedParam.min) : 0;
-      const max = Number.isFinite(Number(speedParam.max))
-        ? Number(speedParam.max)
-        : derivedMax;
-      const step = Number.isFinite(Number(speedParam.step))
-        ? Number(speedParam.step)
-        : 0.01;
-      const defaultSpeed = Number.isFinite(Number(speedParam.default))
-        ? Number(speedParam.default)
-        : min;
-
-      speedInputEl.min = String(min);
-      speedInputEl.max = String(max);
-      speedInputEl.step = String(step);
-
-      currentSpeed = clamp(defaultSpeed, min, max);
-      speedInputEl.value = String(currentSpeed);
-      updateSpeedValueLabel(currentSpeed);
-
-      speedInputEl.oninput = (event) => {
-        const value = Number(event.target.value);
-        currentSpeed = Number.isFinite(value) ? value : min;
-        updateSpeedValueLabel(currentSpeed);
-        updateLocomotionFromSpeed();
-      };
-
-      if (stateMap.has("idle")) {
-        idleStateName = "idle";
-      } else {
-        idleStateName =
-          Object.keys(stateDefs).find(
-            (stateName) =>
-              stateMap.has(stateName) &&
-              !Array.isArray(stateDefs[stateName].speedRange)
-          ) ?? locomotionStates[0]?.stateName ?? [...stateMap.keys()][0];
-      }
-    }
-
     function fitCameraToModel(modelRoot) {
       const bounds = new THREE.Box3().setFromObject(modelRoot);
       const center = bounds.getCenter(new THREE.Vector3());
@@ -568,8 +415,6 @@
         if (nextState && stateMap.has(nextState)) {
           playState(nextState);
         }
-
-        updateLocomotionFromSpeed({ force: true });
       });
 
       const clipDefs = asset.animations?.clips ?? [];
@@ -602,14 +447,10 @@
       const playableStateNames = stateNames.filter((stateName) => stateMap.has(stateName));
       buildStateButtons(playableStateNames);
 
-      locomotionStates = deriveLocomotionStates(stateDefs);
-      configureSpeedControl(asset, stateDefs);
-
       const initialState = asset.stateMachine?.initialState;
-      const speedState = pickLocomotionStateForSpeed(currentSpeed);
-      const startState = stateMap.has(speedState)
-        ? speedState
-        : (stateMap.has(initialState) ? initialState : playableStateNames[0]);
+      const startState = stateMap.has(initialState)
+        ? initialState
+        : playableStateNames[0];
 
       playState(startState, { immediate: true });
     }
